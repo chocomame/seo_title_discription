@@ -11,7 +11,7 @@ def main():
     st.title("クリニックSEO最適化支援ツール")
     st.markdown("✨更新情報  \n▼ver1.0.0  \nツール作成しました。")
     st.markdown("<font color='red' style='font-size: 13px;line-height:1.5;'>URLにblogが入っている場合は検索対象になりません（膨大な量になる可能性があるため）。<br>そのため、もしも診療案内としてblogを使用されている医院がありましたら、<br>お手数ですが、手動にてご確認をお願いいたします。</font>", unsafe_allow_html=True)
-    st.markdown("※必ず、人の確認をいれてください。")
+    st.markdown("※必ず、人の確認をいれてください。  \nGPT4o-miniを使用しています。個人情報の入力はご遠慮ください。")
     
     # セッションステートの初期化
     if 'seo_proposals' not in st.session_state:
