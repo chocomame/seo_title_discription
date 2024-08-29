@@ -2,8 +2,12 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse, unquote
 from collections import OrderedDict
+import mimetypes
 
 def scrape_clinic_site(url, progress_callback):
+    if not url:
+        return {}  # または適切なエラーハンドリング
+    
     base_domain = urlparse(url).netloc
     visited = OrderedDict()  # 訪問済みURLを順序付きで保存
     to_visit = [url]
@@ -14,7 +18,7 @@ def scrape_clinic_site(url, progress_callback):
         current_url = to_visit.pop(0)
         normalized_url = normalize_url(current_url)
         
-        if normalized_url in visited or not is_same_domain(current_url, base_domain) or is_blog_page(current_url) or is_excluded_file(current_url) or is_news_subpage(current_url):
+        if normalized_url in visited or not is_same_domain(current_url, base_domain) or is_blog_page(current_url) or is_excluded_file(current_url) or is_news_subpage(current_url) or is_image_file(current_url):
             continue
 
         visited[normalized_url] = True
@@ -23,8 +27,12 @@ def scrape_clinic_site(url, progress_callback):
             response = requests.get(current_url)
             response.raise_for_status()
             
+            print(f"Processing URL: {current_url}")
+            print(f"Response encoding: {response.encoding}")
+            print(f"Response apparent encoding: {response.apparent_encoding}")
+            
             # エンコーディングを自動検出
-            if response.encoding.lower() == 'iso-8859-1':
+            if response.encoding and response.encoding.lower() == 'iso-8859-1':
                 response.encoding = response.apparent_encoding
             
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -58,7 +66,6 @@ def scrape_clinic_site(url, progress_callback):
     return scraped_data
 
 def extract_description(soup):
-    # 大文字小文字を区別せずにdescriptionを検索
     meta_desc = soup.find('meta', attrs={'name': lambda x: x and x.lower() == 'description'})
     if meta_desc and 'content' in meta_desc.attrs:
         return meta_desc['content'].strip()
@@ -82,15 +89,21 @@ def get_display_url(url):
     return url
 
 def is_same_domain(url, base_domain):
-    return urlparse(url).netloc == base_domain
+    return url and urlparse(url).netloc == base_domain
 
 def is_blog_page(url):
-    return 'blog' in url.lower()
+    return url and 'blog' in url.lower()
 
 def is_excluded_file(url):
     # 除外するファイル拡張子のリスト
     excluded_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.zip', '.rar']
-    return any(url.lower().endswith(ext) for ext in excluded_extensions)
+    return url and (any(url.lower().endswith(ext) for ext in excluded_extensions) or is_image_file(url))
+
+def is_image_file(url):
+    # URLの拡張子からMIMEタイプを推測
+    mime_type, _ = mimetypes.guess_type(url)
+    # MIMEタイプが画像の場合はTrueを返す
+    return mime_type and mime_type.startswith('image/')
 
 def extract_address(soup):
     # クリニックの住所を抽出する処理（実装が必要）
@@ -99,7 +112,8 @@ def extract_address(soup):
     return address_element.text.strip() if address_element else "住所抽出済み"
 
 def is_news_subpage(url):
-    # ニュースの子ページを判定
+    if not url:
+        return False
     parsed = urlparse(url)
     path = parsed.path.strip('/')
     parts = path.split('/')

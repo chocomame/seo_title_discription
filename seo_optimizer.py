@@ -2,6 +2,7 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import re
+import time
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -11,8 +12,16 @@ def generate_seo_proposals(processed_data, seo_goal):
     for page, data in processed_data.items():
         try:
             prompt = create_prompt(data, seo_goal)
-            response = call_openai_api(prompt)
-            seo_proposals[page] = parse_response(response, data)
+            response = call_openai_api_with_retry(prompt)
+            parsed_response = parse_response(response, data)
+            
+            # 回答が不完全な場合、再試行
+            if is_incomplete_response(parsed_response):
+                print(f"Incomplete response for {page}. Retrying...")
+                response = call_openai_api_with_retry(prompt)
+                parsed_response = parse_response(response, data)
+            
+            seo_proposals[page] = parsed_response
         except Exception as e:
             print(f"Error processing page {page}: {str(e)}")
             seo_proposals[page] = {
@@ -23,6 +32,22 @@ def generate_seo_proposals(processed_data, seo_goal):
                 'proposed_descriptions': []
             }
     return seo_proposals
+
+def call_openai_api_with_retry(prompt, max_retries=1):
+    for attempt in range(max_retries + 1):
+        try:
+            return call_openai_api(prompt)
+        except Exception as e:
+            if attempt < max_retries:
+                print(f"API call failed. Retrying... (Attempt {attempt + 1}/{max_retries + 1})")
+                time.sleep(2)  # 2秒待機してから再試行
+            else:
+                raise e
+
+def is_incomplete_response(parsed_response):
+    # 提案されたタイトルまたはディスクリプションが3つ未満の場合、不完全とみなす
+    return (len(parsed_response['proposed_titles']) < 3 or 
+            len(parsed_response['proposed_descriptions']) < 3)
 
 def create_prompt(data, seo_goal):
     # 住所から市区町村までを抽出
@@ -39,44 +64,6 @@ def create_prompt(data, seo_goal):
     ページコンテンツ:
     {data['content'][:2500]}...  # コンテンツの一部のみを使用
 
-    タスク:
-    1. 最適化されたタイトルを3つ提案してください。
-    2. 最適化されたディスクリプションを3つ提案してください。
-      - ページコンテンツの内容がある場合は、既存サイトのディスクリプションとページコンテンツを合わせてSEO最適化して出力してください。
-      - ページコンテンツの内容がない場合は、既存サイトのディスクリプションをSEO最適化して出力してください。
-    3. 各提案には、クリニックの所在地（市区町村まで）を適切に含めてください。ただし、必要な場合のみ含めてください。
-    4. ディスクリプションの文章量は多めに書き、説明文を充実させてください。
-    
-    
-    禁止事項：
-    1. 万が一、個人情報が入力された場合はタイトルとディスクリプションには絶対含めないでください。
-    
-    
-    タイトルの出力例：
-    1. 必ず冒頭にページ名を入れること。
-    - 内科｜XXXXXX（SEO最適化されたページのタイトル）
-    - お知らせ｜XXXXXX（SEO最適化されたページのタイトル）
-    2. indexページの場合は冒頭にサイト名を入れること。
-    - まめる医院｜XXXXXX（SEO最適化されたページのタイトル）
-    - みえる眼科クリニック｜XXXXXX（SEO最適化されたページのタイトル）
-    
-    
-    ディスクリプションの出力例：
-    1. 必ず冒頭にページ名を入れること。
-    - 内科。XXXXXX（ページの説明）
-    - お知らせ。XXXXXX（ページの説明）
-    2. indexページの場合は冒頭にサイト名を入れること。
-    - まめる医院。XXXXXX（ページの説明）
-    - みえる眼科クリニック。XXXXXX（ページの説明）
-    
-
-    回答は以下の形式で提供してください：
-    タイトル案1: [提案]
-    タイトル案2: [提案]
-    タイトル案3: [提案]
-    ディスクリプション案1: [提案]
-    ディスクリプション案2: [提案]
-    ディスクリプション案3: [提案]
     """
 
 def extract_city(address):
@@ -92,8 +79,57 @@ def call_openai_api(prompt):
         response = client.chat.completions.create(
             model="gpt-4o-mini-2024-07-18",  # または "gpt-4-turbo" など、利用可能なモデルを指定
             messages=[
-                {"role": "system", "content": "あなたはSEO専門家です。クリニックのウェブサイト最適化を支援します。"},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": 
+    """
+    あなたはSEO専門家です。クリニックのウェブサイト最適化を支援します。
+    
+    タスク:
+    1. 最適化されたタイトルを3つ提案してください。
+    2. 最適化されたディスクリプションを3つ提案してください。
+      - ページコンテンツの内容がある場合は、既存サイトのディスクリプションとページコンテンツを合わせてSEO最適化して出力してください。
+      - ページコンテンツの内容がない場合は、既存サイトのディスクリプションをSEO最適化して出力してください。
+    3. 各提案には、クリニックの所在地（市区町村まで）を適切に含めてください。ただし、必要な場合のみ含めてください。
+    4. ディスクリプションの文章量は多めに書き、説明文を充実させてください。
+    """
+                },
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": 
+    """
+    禁止事項：
+    1. 万が一、個人情報が入力された場合はタイトルとディスクリプションには絶対含めないでください。
+    
+    
+    タイトルの出力例：
+    1. 必ず既存サイトのtitleに書かれているページ名を冒頭に入れること。ページ名は変更しない！
+    - 内科｜XXXXXX（SEO最適化されたページのタイトル）
+    - お知らせ｜XXXXXX（SEO最適化されたページのタイトル）
+    - 医師・クリニック紹介｜XXXXXX（SEO最適化されたページのタイトル）
+    - はじめての方へ｜XXXXXX（SEO最適化されたページのタイトル）
+    2. indexページの場合は冒頭にサイト名を入れること。
+    - まめる医院｜XXXXXX（SEO最適化されたページのタイトル）
+    - みえる眼科クリニック｜XXXXXX（SEO最適化されたページのタイトル）
+    
+    
+    ディスクリプションの出力例：
+    1. 必ず冒頭に既存サイトのdiscriptionに書かれているページ名を入れること。ページ名は変更しない！
+    - 内科。XXXXXX（ページの説明）
+    - お知らせ。XXXXXX（ページの説明）
+    - 医師・クリニック紹介。XXXXXX（ページの説明）
+    - はじめての方へ。XXXXXX（ページの説明）
+    2. indexページの場合は冒頭にサイト名を入れること。
+    - まめる医院。XXXXXX（ページの説明）
+    - みえる眼科クリニック。XXXXXX（ページの説明）
+    
+
+    回答は以下の形式で提供してください：
+    タイトル案1: [提案]
+    タイトル案2: [提案]
+    タイトル案3: [提案]
+    ディスクリプション案1: [提案]
+    ディスクリプション案2: [提案]
+    ディスクリプション案3: [提案]
+    """
+            }
             ]
         )
         return response.choices[0].message.content
