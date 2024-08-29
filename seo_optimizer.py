@@ -9,9 +9,19 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 def generate_seo_proposals(processed_data, seo_goal):
     seo_proposals = {}
     for page, data in processed_data.items():
-        prompt = create_prompt(data, seo_goal)
-        response = call_openai_api(prompt)
-        seo_proposals[page] = parse_response(response, data)
+        try:
+            prompt = create_prompt(data, seo_goal)
+            response = call_openai_api(prompt)
+            seo_proposals[page] = parse_response(response, data)
+        except Exception as e:
+            print(f"Error processing page {page}: {str(e)}")
+            seo_proposals[page] = {
+                'current_title': data.get('title', ''),
+                'current_description': data.get('description', ''),
+                'clinic_address': data.get('address', ''),
+                'proposed_titles': [],
+                'proposed_descriptions': []
+            }
     return seo_proposals
 
 def create_prompt(data, seo_goal):
@@ -35,6 +45,7 @@ def create_prompt(data, seo_goal):
       - ページコンテンツの内容がある場合は、既存サイトのディスクリプションとページコンテンツを合わせてSEO最適化して出力してください。
       - ページコンテンツの内容がない場合は、既存サイトのディスクリプションをSEO最適化して出力してください。
     3. 各提案には、クリニックの所在地（市区町村まで）を適切に含めてください。ただし、必要な場合のみ含めてください。
+    4. ディスクリプションの文章量は多めに書き、説明文を充実させてください。
     
     
     禁止事項：
@@ -42,16 +53,22 @@ def create_prompt(data, seo_goal):
     
     
     タイトルの出力例：
-    必ず冒頭にページ名を入れること。
+    1. 必ず冒頭にページ名を入れること。
     - 内科｜XXXXXX（SEO最適化されたページのタイトル）
     - お知らせ｜XXXXXX（SEO最適化されたページのタイトル）
+    2. indexページの場合は冒頭にサイト名を入れること。
+    - まめる医院｜XXXXXX（SEO最適化されたページのタイトル）
+    - みえる眼科クリニック｜XXXXXX（SEO最適化されたページのタイトル）
     
     
     ディスクリプションの出力例：
-    必ず冒頭にページ名を入れること。
+    1. 必ず冒頭にページ名を入れること。
     - 内科。XXXXXX（ページの説明）
     - お知らせ。XXXXXX（ページの説明）
-
+    2. indexページの場合は冒頭にサイト名を入れること。
+    - まめる医院。XXXXXX（ページの説明）
+    - みえる眼科クリニック。XXXXXX（ページの説明）
+    
 
     回答は以下の形式で提供してください：
     タイトル案1: [提案]

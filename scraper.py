@@ -14,7 +14,7 @@ def scrape_clinic_site(url, progress_callback):
         current_url = to_visit.pop(0)
         normalized_url = normalize_url(current_url)
         
-        if normalized_url in visited or not is_same_domain(current_url, base_domain) or is_blog_page(current_url) or is_excluded_file(current_url):
+        if normalized_url in visited or not is_same_domain(current_url, base_domain) or is_blog_page(current_url) or is_excluded_file(current_url) or is_news_subpage(current_url):
             continue
 
         visited[normalized_url] = True
@@ -45,7 +45,7 @@ def scrape_clinic_site(url, progress_callback):
             for link in soup.find_all('a', href=True):
                 new_url = urljoin(current_url, link['href'])
                 normalized_new_url = normalize_url(new_url)
-                if normalized_new_url not in visited and is_same_domain(new_url, base_domain) and not is_blog_page(new_url) and not is_excluded_file(new_url):
+                if normalized_new_url not in visited and is_same_domain(new_url, base_domain) and not is_blog_page(new_url) and not is_excluded_file(new_url) and not is_news_subpage(new_url):
                     to_visit.append(new_url)
 
             # 進捗状況をコールバック
@@ -96,4 +96,11 @@ def extract_address(soup):
     # クリニックの住所を抽出する処理（実装が必要）
     # 例: 特定のクラスやID、構造に基づいて住所を抽出
     address_element = soup.find('address')  # または適切なセレクタを使用
-    return address_element.text.strip() if address_element else "抽出された住所"
+    return address_element.text.strip() if address_element else "住所抽出済み"
+
+def is_news_subpage(url):
+    # ニュースの子ページを判定
+    parsed = urlparse(url)
+    path = parsed.path.strip('/')
+    parts = path.split('/')
+    return len(parts) > 1 and parts[0].lower() in ['news', 'topics', 'information'] and len(parts) > 1
