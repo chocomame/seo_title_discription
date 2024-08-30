@@ -109,41 +109,40 @@ def display_results(seo_proposals):
     for page, proposals in seo_proposals.items():
         with st.expander(f"ページ: {page}"):
             st.markdown("### 現在の情報:", unsafe_allow_html=True)
-            st.write(f"タイトル: {proposals['current_title']}")
-            st.write(f"ディスクリプション: {proposals['current_description']}")
-            st.write(f"クリニック所在地: {proposals['clinic_address']}")
+            st.write(f"タイトル: {proposals['current_title']} (文字数: {len(proposals['current_title'])})")
+            st.write(f"ディスクリプション: {proposals['current_description']} (文字数: {len(proposals['current_description'])})")
             
             st.markdown("### 最適化提案:", unsafe_allow_html=True)
             for i, title in enumerate(proposals['proposed_titles'], 1):
-                st.write(f"タイトル案 {i}: {title}")
+                st.write(f"タイトル案 {i}: {title} (文字数: {len(title)})")
             for i, desc in enumerate(proposals['proposed_descriptions'], 1):
-                st.write(f"ディスクリプション案 {i}: {desc}")
+                st.write(f"ディスクリプション案 {i}: {desc} (文字数: {len(desc)})")
 
 def convert_to_csv(seo_proposals):
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ページURL', '現在のタイトル', '現在のディスクリプション', 'クリニック所在地', 
-                     'タイトル案1', 'タイトル案2', 'タイトル案3', 
-                     'ディスクリプション案1', 'ディスクリプション案2', 'ディスクリプション案3'])
-    
+    line_num = 1
+
     for page, proposals in seo_proposals.items():
-        row = [
-            page,
-            proposals.get('current_title', ''),
-            proposals.get('current_description', ''),
-            proposals.get('clinic_address', '')
-        ]
+        writer.writerow(['ページURL', page, '文字数'])
+        line_num += 1
+        writer.writerow(['現在のタイトル', proposals.get('current_title', ''), f'=LEN(B{line_num})'])
+        line_num += 1
         
-        # タイトル案の追加（最大3つ）
-        titles = proposals.get('proposed_titles', [])
-        row.extend(titles + [''] * (3 - len(titles)))
+        for i, title in enumerate(proposals.get('proposed_titles', []), 1):
+            writer.writerow([f'タイトル案{i}', title, f'=LEN(B{line_num})'])
+            line_num += 1
         
-        # ディスクリプション案の追加（最大3つ）
-        descriptions = proposals.get('proposed_descriptions', [])
-        row.extend(descriptions + [''] * (3 - len(descriptions)))
+        writer.writerow(['現在のディスクリプション', proposals.get('current_description', ''), f'=LEN(B{line_num})'])
+        line_num += 1
         
-        writer.writerow(row)
-    
+        for i, desc in enumerate(proposals.get('proposed_descriptions', []), 1):
+            writer.writerow([f'ディスクリプション案{i}', desc, f'=LEN(B{line_num})'])
+            line_num += 1
+        
+        writer.writerow([])  # 空行を挿入して各ページを区切る
+        line_num += 1
+
     return output.getvalue()
 
 def extract_clinic_name(scraped_data):
