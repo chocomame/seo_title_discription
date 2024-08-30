@@ -6,6 +6,8 @@ from scraper import scrape_clinic_site
 from preprocessor import preprocess_data
 from seo_optimizer import generate_seo_proposals
 import re
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 # パスワード認証機能を追加
 def check_password():
@@ -90,14 +92,14 @@ def main():
     if st.session_state.analysis_complete:
         display_results(st.session_state.seo_proposals)
 
-        # CSVダウンロードボタンの追加
-        csv = convert_to_csv(st.session_state.seo_proposals)
-        file_name = f"{st.session_state.clinic_name}_SEO最適化案.csv"
+        # Excelファイルダウンロードボタンの追加
+        excel = convert_to_excel(st.session_state.seo_proposals)
+        file_name = f"{st.session_state.clinic_name}_SEO最適化案.xlsx"
         st.download_button(
-            label="結果をCSVでダウンロード",
-            data=csv.encode('utf-8-sig'),  # BOMを追加してExcelで開いたときに文字化けしないようにする
+            label="結果をExcelでダウンロード",
+            data=excel,
             file_name=file_name,
-            mime="text/csv",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
 def update_progress(progress_bar, status_text, progress, message):
@@ -118,32 +120,58 @@ def display_results(seo_proposals):
             for i, desc in enumerate(proposals['proposed_descriptions'], 1):
                 st.write(f"ディスクリプション案 {i}: {desc} (文字数: {len(desc)})")
 
-def convert_to_csv(seo_proposals):
-    output = io.StringIO()
-    writer = csv.writer(output)
-    line_num = 1
+def convert_to_excel(seo_proposals):
+    wb = Workbook()
+    ws = wb.active
+    row_num = 1
 
     for page, proposals in seo_proposals.items():
-        writer.writerow(['ページURL', page, '文字数'])
-        line_num += 1
-        writer.writerow(['現在のタイトル', proposals.get('current_title', ''), f'=LEN(B{line_num})'])
-        line_num += 1
+        ws.cell(row=row_num, column=1, value='ページURL')
+        ws.cell(row=row_num, column=2, value=page)
+        ws.cell(row=row_num, column=3, value='文字数')
+        row_num += 1
+
+        ws.cell(row=row_num, column=1, value='現在のタイトル')
+        ws.cell(row=row_num, column=2, value=proposals.get('current_title', ''))
+        ws.cell(row=row_num, column=3, value=f'=LEN(B{row_num})')
+        row_num += 1
         
         for i, title in enumerate(proposals.get('proposed_titles', []), 1):
-            writer.writerow([f'タイトル案{i}', title, f'=LEN(B{line_num})'])
-            line_num += 1
+            ws.cell(row=row_num, column=1, value=f'タイトル案{i}')
+            ws.cell(row=row_num, column=2, value=title)
+            ws.cell(row=row_num, column=3, value=f'=LEN(B{row_num})')
+            row_num += 1
         
-        writer.writerow(['現在のディスクリプション', proposals.get('current_description', ''), f'=LEN(B{line_num})'])
-        line_num += 1
+        ws.cell(row=row_num, column=1, value='現在のディスクリプション')
+        ws.cell(row=row_num, column=2, value=proposals.get('current_description', ''))
+        ws.cell(row=row_num, column=3, value=f'=LEN(B{row_num})')
+        row_num += 1
         
         for i, desc in enumerate(proposals.get('proposed_descriptions', []), 1):
-            writer.writerow([f'ディスクリプション案{i}', desc, f'=LEN(B{line_num})'])
-            line_num += 1
+            ws.cell(row=row_num, column=1, value=f'ディスクリプション案{i}')
+            ws.cell(row=row_num, column=2, value=desc)
+            ws.cell(row=row_num, column=3, value=f'=LEN(B{row_num})')
+            row_num += 1
         
-        writer.writerow([])  # 空行を挿入して各ページを区切る
-        line_num += 1
+        row_num += 1  # 空行を挿入
 
-    return output.getvalue()
+    # 列幅の自動調整
+    for column in ws.columns:
+        max_length = 0
+        column_letter = get_column_letter(column[0].column)
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = (max_length + 2)
+        ws.column_dimensions[column_letter].width = adjusted_width
+
+    excel_file = io.BytesIO()
+    wb.save(excel_file)
+    excel_file.seek(0)
+    return excel_file.getvalue()
 
 def extract_clinic_name(scraped_data):
     # トップページのタイトルからクリニック名を抽出
